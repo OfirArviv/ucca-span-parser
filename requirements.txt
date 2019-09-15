@@ -1,0 +1,4 @@
+overrides
+torch >= 1.0.0
+ucca >= 1.0.127
+allennlp
