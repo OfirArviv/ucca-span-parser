@@ -1,6 +1,7 @@
 import copy
 import os
-from typing import Dict, List, Iterator
+from random import shuffle
+from typing import Dict, List, Iterator, Callable, Tuple
 from allennlp.data import DatasetReader, TokenIndexer, Instance, Field
 from allennlp.data.dataset_readers.dataset_utils import enumerate_spans
 from allennlp.data.fields import TextField, MetadataField, LabelField, ArrayField, SpanField, ListField, \
@@ -17,12 +18,29 @@ import numpy as np
 @DatasetReader.register('ucca-span')
 # TODO: Go over
 class UccaSpanParserDatasetReader(DatasetReader):
-    def __init__(self, word_tokenizer: WordSplitter,
-                 token_indexers: Dict[str, TokenIndexer]
+    def __init__(self,
+                 word_tokenizer: WordSplitter,
+                 token_indexers: Dict[str, TokenIndexer],
+                 filter_func: Callable[[List[str]], bool] = None,
+                 shuffle: bool = True,
+                 lazy: bool = False
                  ) -> None:
-        super().__init__(lazy=True)
+        super().__init__(lazy=lazy)
         self.word_tokenizer = word_tokenizer
         self.token_indexers = token_indexers
+        self.filter_func = filter_func
+        self.shuffle = shuffle
+
+    @staticmethod
+    def _get_file_list(dataset_dir: str, dataset_title_prefix: str = "") -> Iterator[Tuple[str, str]]:
+        dir_name = os.path.basename(dataset_dir)
+        dataset_title = f'{dataset_title_prefix}{dir_name}'
+        for file in sorted(os.listdir(dataset_dir)):
+            file_path = os.path.join(dataset_dir, file)
+            if os.path.isdir(file_path):
+                yield from UccaSpanParserDatasetReader._get_file_list(file_path, f'{dataset_title}_')
+            else:
+                yield (file_path, dataset_title)
 
     @overrides
     def text_to_instance(self, tokenized_text: [str], passage: Passage, dataset_label: str, lang: str, id: str = None,
@@ -112,26 +130,40 @@ class UccaSpanParserDatasetReader(DatasetReader):
         return Instance(fields)
 
     @overrides
-    def _read(self, dataset_dir: str, dataset_title_prefix: str = "") -> Iterator[Instance]:
-        dir_name = os.path.basename(dataset_dir)
-        dataset_label = f'{dataset_title_prefix}{dir_name}'
-        for file in sorted(os.listdir(dataset_dir)):
-            file_path = os.path.join(dataset_dir, file)
-            if os.path.isdir(file_path):
-                yield from self._read(file_path, f'{dataset_title_prefix}{dir_name}_')
-            else:
-                # TODO: In the future, I would like to pass to the text_to_instance only a string.
-                #  Training data comes pre-tokenized and the text may not. Need to think about it.
-                #  Also Need to think how to support reading features from file.
-                #  For both issues, maybe another reader is the solution?  Sound reasonable.
-                passage = file2passage(file_path)
-                tokenized_text = [node.text for node in sorted(passage.layer("0").all, key=lambda x: x.position)]
-                gold_tree = None
-                if "1" in passage._layers:
-                    gold_tree = copy.deepcopy(passage)
-                lang = passage.attrib.get("lang")
-                assert lang, "Attribute 'lang' is required per passage when using this model"
-                id = passage.ID
-                assert id, "Attribute 'id' is required per passage when using this model"
+    def _read(self, file_path: str) -> Iterator[Instance]:
+        # TODO: In the future, I would like to pass to the text_to_instance only a string.
+        #  Training data comes pre-tokenized and the text may not. Need to think about it.
+        #  Also Need to think how to support reading features from file.
+        #  For both issues, maybe another reader is the solution?  Sound reasonable.
+        file_list: List[Tuple[str, str]] = list(self._get_file_list(file_path))
 
-                yield self.text_to_instance(tokenized_text, passage, dataset_label, lang, id, gold_tree)
+        if self.shuffle:
+            shuffle(file_list)
+
+        for file_path, dataset_title in file_list:
+            passage = file2passage(file_path)
+
+            tokenized_text = [node.text for node in sorted(passage.layer("0").all, key=lambda x: x.position)]
+
+            id = passage.ID
+            assert id, "Attribute 'id' is required per passage when using this model"
+
+            lang = passage.attrib.get("lang")
+            assert lang, "Attribute 'lang' is required per passage when using this model"
+
+            gold_tree = None
+            if "1" in passage._layers:
+                gold_tree = copy.deepcopy(passage)
+
+            if self.filter_func and self.filter_func(tokenized_text):
+                print(f'Filtering out passage {id}!')
+                continue
+
+            # TODO: Move it out of the class
+            if len(tokenized_text) > 200:
+                print(f'Filtering out passage {id} with length longer than 200 tokens!')
+                continue
+
+            # TODO: There is no need to give both the passage object and the tokenized_text, language and id.
+            #  Also, if we support text-only input, you don't have these.
+            yield self.text_to_instance(tokenized_text, passage, dataset_title, lang, id, gold_tree)

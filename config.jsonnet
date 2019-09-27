@@ -87,9 +87,14 @@ local learning_rate = 0.1;
         },
         "span_decoder":{
             "type": "topdown",
-
-
         },
+        "remote_parser":{
+            "type": "basic",
+            "mlp_dim": remote_parser_mlp_dim
+        },
+        "evaluator":{
+            "type": "ucca-scores"
+        }
     },
     "iterator": {
         "type": "bucket",
@@ -99,7 +104,7 @@ local learning_rate = 0.1;
     "trainer": {
         "num_epochs": num_epochs,
         "optimizer": {
-            "type": "sgd",
+            "type": "adam",
             "lr": learning_rate
         },
         "patience": patience

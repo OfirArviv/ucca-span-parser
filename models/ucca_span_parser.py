@@ -7,7 +7,10 @@ from allennlp.nn.util import get_text_field_mask, get_lengths_from_binary_sequen
 from allennlp.data import Vocabulary
 from ucca.core import Passage
 from htl_suda_ucca_parser import InternalParseNode, to_UCCA
-from htl_suda_ucca_parser.module import Topdown_Span_Parser, Remote_Parser
+from htl_suda_ucca_parser.module import Topdown_Span_Parser, Remote_Parser, Topdown_Span_Parser_Factory
+from pytorch_memlab import profile
+
+from htl_suda_ucca_parser.module.remote_parser import Remote_Parser_Factory
 
 
 @Model.register('ucca-span-parser')
@@ -15,19 +18,20 @@ class UccaSpanParser(Model):
     def __init__(self,
                  token_embedder: TextFieldEmbedder,
                  encoder: Seq2SeqEncoder,
-                 span_decoder: Topdown_Span_Parser,
+                 span_decoder: Topdown_Span_Parser_Factory,
                  span_extractor: SpanExtractor,
-                 remote_parser: Remote_Parser,
+                 remote_parser: Remote_Parser_Factory,
                  evaluator: any,
                  vocab: Vocabulary) -> None:
         super().__init__(vocab)
         self.token_embedder = token_embedder
         self.encoder = encoder
-        self.span_decoder = span_decoder
+        self.span_decoder = span_decoder(span_extractor.get_output_dim(), vocab)
         self.span_extractor = span_extractor
-        self.remote_parser = remote_parser
+        self.remote_parser = remote_parser(span_extractor.get_output_dim(), vocab)
         self.evaluator = evaluator
 
+    #@profile
     def forward(self,
                 tokens: Dict[str, torch.Tensor],
                 passage: [Passage],

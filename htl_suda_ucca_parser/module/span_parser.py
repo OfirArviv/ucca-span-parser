@@ -16,7 +16,7 @@ from ast import literal_eval as make_tuple
 
 # TODO: Enable and test the other parsers
 
-class SpanParser(torch.nn.Module, Registrable):
+class SpanParser(torch.nn.Module):
 
     @abstractmethod
     def get_loss(self):
@@ -25,8 +25,6 @@ class SpanParser(torch.nn.Module, Registrable):
     def predict(self):
         raise NotImplemented
 
-
-@SpanParser.register("topdown")
 class Topdown_Span_Parser(SpanParser):
     def __init__(self, vocab: Vocabulary, span_dim, dropout=0.2):
         # TODO: Add label_hidden_dim, split_hidden_dim, norm=False
@@ -131,6 +129,20 @@ class Topdown_Span_Parser(SpanParser):
         increment[oracle_index] = 0
         return scores + increment
 
+
+class Span_Parser_Factory(Registrable):
+    @abstractmethod
+    def __call__(self, span_dim: int, vocab: Vocabulary):
+        raise NotImplemented
+
+
+@Span_Parser_Factory.register("topdown")
+class Topdown_Span_Parser_Factory(Span_Parser_Factory):
+    def __init__(self, dropout=0.2):
+        self.dropout = dropout
+
+    def __call__(self, span_dim: int, vocab: Vocabulary) -> Topdown_Span_Parser:
+        return Topdown_Span_Parser(vocab, span_dim, self.dropout)
 
 """
 class Chart_Span_Parser(nn.Module):

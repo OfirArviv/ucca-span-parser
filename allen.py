@@ -15,9 +15,10 @@ from allennlp.data import Vocabulary
 from allennlp.data.token_indexers import PosTagIndexer, PretrainedBertIndexer, DepLabelIndexer, \
     NerTagIndexer
 from torch import nn, optim
+from ucca.convert import file2passage
 
-
-from htl_suda_ucca_parser.module import Topdown_Span_Parser, Remote_Parser
+from htl_suda_ucca_parser.module import Topdown_Span_Parser, Remote_Parser, Topdown_Span_Parser_Factory, \
+    Basic_Remote_Parser_Factory
 from models import UccaSpanParser
 from metrics import UccaScores
 from tokenizers import SpacyMultilingualWhitespaceWordSplitter
@@ -26,69 +27,42 @@ from dataset_readers import UccaSpanParserDatasetReader
 from token_indexers import LanguageIndexer
 
 
-"""
-    elmo_indexer = ELMoTokenCharactersIndexer()
 
-    aligning_files = {
-        "en": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/en_best_mapping.pth",
-        "fr": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/fr_best_mapping.pth",
-        "de": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/de_best_mapping.pth"
-    }
-    options_files = {
-        "en": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/options262.json",
-        "fr": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/options262.json",
-        "de": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/options262.json"
-    }
-    weight_files = {
-        "en": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/en_weights.hdf5",
-        "fr": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/fr_weights.hdf5",
-        "de": "https://s3-us-west-2.amazonaws.com/allennlp/models/multilingual_elmo/de_weights.hdf5"
-    }
-    scalar_mix_parameters = [-9e10, 1, -9e10]
-    elmo_embedder = ElmoTokenEmbedderMultiLang(options_files=options_files,
-                                               weight_files=weight_files,
-                                               dropout=0.3,
-                                               requires_grad=False,
-                                               scalar_mix_parameters=scalar_mix_parameters,
-                                               aligning_files=aligning_files)
-                                               
-     word_embedder = BasicTextFieldEmbedder({"elmo": elmo_embedder,
-                                            "deps": linguistic_features_embedding,
-                                            "ner": linguistic_features_embedding,
-                                            "pos": linguistic_features_embedding,
-                                            "lang": linguistic_features_embedding,
-                                            })
-    """
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-                        level=logging.INFO)
+                        level=logging.DEBUG)
 
-    #prepare_global_logging(serialization_dir, file_friendly_logging)
+    # prepare_global_logging(serialization_dir, file_friendly_logging)
 
     bert_mode = "bert-base-multilingual-cased"
+    bert_do_lowercase = "uncased" in bert_mode
+    bert_finetuning = False
 
     linguistic_features_embedding_dim = 50
     encoder_output_dim = 200
     remote_parser_mlp_dim = 100
 
     batch_size = 10
+    num_epochs = 1000
+    patience = 10
+    grad_norm = 5.0
 
-    train_dataset_folder = "C:/Users/t-ofarvi/PycharmProjects/UCCA_Dataset_29-06-09/tryout"  # "C:/Users/t-ofarvi/Desktop/train_allen"
-    validation_dataset_folder = "C:/Users/t-ofarvi/Desktop/dev_allen"
+    train_dataset_folder = "C:/Users/t-ofarvi/PycharmProjects/UCCA_Dataset_29-06-09/tryout" #"C:/Users/t-ofarvi/Desktop/train_allen"
+    validation_dataset_folder = "C:/Users/t-ofarvi/PycharmProjects/UCCA_Dataset_29-06-09/tryout-validation"  #"C:/Users/t-ofarvi/Desktop/dev_allen"
 
-    model_dir = "C:/Users/t-ofarvi/PycharmProjects/UCCA_Dataset_29-06-09/tryout-model"
+    model_dir = "C:/Users/t-ofarvi/PycharmProjects/tryout-model"
     vocab_dir = f'{model_dir}/vocabulary'
 
-    word_tokenizer = SpacyMultilingualWhitespaceWordSplitter()
     # NOTE: The word tokenizer is a SpaCy tokenizer, which is a little different from the BERT tokenizer.
     # This was done for convince.
+    word_tokenizer = SpacyMultilingualWhitespaceWordSplitter()
+
     bert_indexer = PretrainedBertIndexer(
         pretrained_model=bert_mode,
-        do_lowercase="uncased" in bert_mode,
+        do_lowercase=bert_do_lowercase,
         truncate_long_sequences=False
     )
-
     word_indexer = {"bert": bert_indexer,
                     "deps": DepLabelIndexer(namespace="deps_tags"),
                     "ner": NerTagIndexer(),
@@ -106,7 +80,6 @@ if __name__ == '__main__':
 
     vocab_namespaces = vocab._index_to_token.keys()
     max_vocab_size = max([vocab.get_vocab_size(namespace) for namespace in vocab_namespaces])
-
     iterator = BucketIterator(batch_size=batch_size,
                               # This is for testing. To see how big of batch size the GPU can handle.
                               biggest_batch_first=True,
@@ -119,11 +92,10 @@ if __name__ == '__main__':
                                               # padding_index=0 I do not understand what is does
                                               )
     bert_embedder = PretrainedBertEmbedder(
-        pretrained_model="bert-base-multilingual-cased",
+        pretrained_model=bert_mode,
         top_layer_only=False,
-        requires_grad=False,
+        requires_grad=bert_finetuning,
     )
-
     word_embedder = BasicTextFieldEmbedder({"bert": bert_embedder,
                                             "deps": linguistic_features_embedding,
                                             "ner": linguistic_features_embedding,
@@ -143,10 +115,10 @@ if __name__ == '__main__':
 
     # span_extractor: SpanExtractor = SelfAttentiveSpanExtractor(input_dim=encoder.get_output_dim())
     span_extractor: SpanExtractor = BidirectionalEndpointSpanExtractor(input_dim=encoder.get_output_dim())
-
-    span_decoder = Topdown_Span_Parser(vocab, span_extractor.get_output_dim())
-
-    remote_parser = Remote_Parser(vocab, span_extractor.get_output_dim(), remote_parser_mlp_dim)
+    # probably the best solution is to make it like a factory, to add a get_decoder function that get as input
+    # vocab and needed dimnsion.
+    span_decoder = Topdown_Span_Parser_Factory()
+    remote_parser = Basic_Remote_Parser_Factory(remote_parser_mlp_dim)
 
     model = UccaSpanParser(
         word_embedder,
@@ -171,11 +143,11 @@ if __name__ == '__main__':
         train_dataset=train_ds,
         validation_dataset=validation_ds,
         validation_metric="+labeled_average_F1",
-        patience=10,
+        patience=patience,
         cuda_device=cuda_device,
-        num_epochs=50,
+        num_epochs=num_epochs,
         serialization_dir=model_dir,
-        grad_norm=5.0
+        grad_norm=grad_norm
     )
 
     metrics = trainer.train()

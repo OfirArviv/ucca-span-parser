@@ -1,8 +1,10 @@
 """
 This code is taken from https://github.com/SUDA-LA/ucca-parser
 """
+from abc import abstractmethod
 
 import torch
+from allennlp.common import Registrable
 from allennlp.data import Vocabulary
 from allennlp.modules import FeedForward
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
@@ -52,7 +54,8 @@ class Remote_Parser(nn.Module):
                 if remote_label_length[i] == 0:
                     continue
                 span_num = (1 + length) * length // 2
-                label_scores = self.score(spans[i][:span_num], length, remote_nodes_spans[i][:remote_nodes_spans_length[i]])
+                label_scores = self.score(spans[i][:span_num], length,
+                                          remote_nodes_spans[i][:remote_nodes_spans_length[i]])
                 batch_loss.append(
                     loss_func(
                         label_scores[remote_heads[i][:remote_label_length[i]].long(),
@@ -103,4 +106,20 @@ class Remote_Parser(nn.Module):
                     if label is not "<NULL>" and not nodes[i]._tag == "PNCT":
                         passage.layer("1").add_remote(nodes[i], label, nodes[head])
         return passages
+
+
+class Remote_Parser_Factory(Registrable):
+    @abstractmethod
+    def __call__(self, span_dim: int, vocab: Vocabulary) -> Remote_Parser:
+        raise NotImplemented
+
+
+@Remote_Parser_Factory.register("basic")
+class Basic_Remote_Parser_Factory(Remote_Parser_Factory):
+    def __init__(self, mlp_dim: int, dropout=0):
+        self.mlp_dim = mlp_dim
+        self.dropout = dropout
+
+    def __call__(self, span_dim: int, vocab: Vocabulary) -> Remote_Parser:
+        return Remote_Parser(vocab, span_dim, self.mlp_dim, self.dropout)
 
