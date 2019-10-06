@@ -10,8 +10,8 @@ from allennlp.data.tokenizers.word_splitter import WordSplitter
 from overrides import overrides
 from ucca.convert import file2passage
 from ucca.core import Passage
-from htl_suda_ucca_parser import UCCA2tree
-from htl_suda_ucca_parser.convert import gerenate_remote
+from ucca_span_parser.htl_suda_ucca_parser.convert.convert import UCCA2tree
+from ucca_span_parser.htl_suda_ucca_parser.convert.trees import gerenate_remote
 import numpy as np
 
 

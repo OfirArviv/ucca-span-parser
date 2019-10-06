@@ -10,8 +10,8 @@ from allennlp.modules import FeedForward
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
 from torch import nn
 
-from htl_suda_ucca_parser import get_position
-from htl_suda_ucca_parser import Biaffine
+from ..convert.trees import get_position
+from .biaffine import Biaffine
 
 
 class Remote_Parser(nn.Module):
@@ -63,7 +63,8 @@ class Remote_Parser(nn.Module):
                         remote_labels[i][:remote_label_length[i]].to(spans[i].device),
                     )
                 )
-        return torch.stack(batch_loss, 0).mean()
+        # TODO: Changing mean() to sum() because that how its done in the original code
+        return torch.stack(batch_loss, 0).sum()
 
     def predict(self, span, sen_len, all_nodes, remote_head):
         label_scores = self.score(span, sen_len, all_nodes)

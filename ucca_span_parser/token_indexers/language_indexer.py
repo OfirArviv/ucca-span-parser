@@ -5,7 +5,7 @@ import torch
 from allennlp.common.util import pad_sequence_to_length
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.token_indexers.token_indexer import TokenIndexer
-from tokenizers import MultilingualToken
+from ucca_span_parser.tokenizers.multilingual_token import MultilingualToken
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
