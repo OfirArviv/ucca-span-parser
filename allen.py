@@ -2,9 +2,7 @@ import itertools
 import logging
 import os
 import torch
-from allennlp.common.util import prepare_global_logging
 from allennlp.data.iterators import BucketIterator
-from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
 from allennlp.modules import Embedding, Seq2VecEncoder
 from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
 from allennlp.modules.span_extractors import SpanExtractor, BidirectionalEndpointSpanExtractor
@@ -15,9 +13,8 @@ from allennlp.data import Vocabulary
 from allennlp.data.token_indexers import PosTagIndexer, PretrainedBertIndexer, DepLabelIndexer, \
     NerTagIndexer
 from torch import nn, optim
-from ucca.convert import file2passage
 
-from htl_suda_ucca_parser.module import Topdown_Span_Parser, Remote_Parser, Topdown_Span_Parser_Factory, \
+from htl_suda_ucca_parser import Topdown_Span_Parser_Factory, \
     Basic_Remote_Parser_Factory
 from models import UccaSpanParser
 from metrics import UccaScores

@@ -7,10 +7,9 @@ import torch
 from allennlp.common import Registrable
 from allennlp.data import Vocabulary
 from allennlp.modules import FeedForward
-from torch import nn
 
-from htl_suda_ucca_parser.convert import InternalParseNode, LeafParseNode
-from htl_suda_ucca_parser.convert import get_position
+from htl_suda_ucca_parser import InternalParseNode, LeafParseNode
+from htl_suda_ucca_parser import get_position
 from ast import literal_eval as make_tuple
 
 

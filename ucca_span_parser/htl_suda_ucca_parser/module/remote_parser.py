@@ -10,8 +10,8 @@ from allennlp.modules import FeedForward
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
 from torch import nn
 
-from htl_suda_ucca_parser.convert import get_position
-from htl_suda_ucca_parser.module import Biaffine
+from htl_suda_ucca_parser import get_position
+from htl_suda_ucca_parser import Biaffine
 
 
 class Remote_Parser(nn.Module):
